@@ -11,9 +11,7 @@ app = Flask(__name__)
 app.secret_key = "dev-secret-key"  # replace later with env variable
 
 
-# -------------------------
-# Login required decorator
-# -------------------------
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -23,9 +21,7 @@ def login_required(f):
     return decorated_function
 
 
-# -------------------------
-# Basic routes
-# -------------------------
+
 @app.route("/")
 def login_page():
     return render_template("login.html")
@@ -84,8 +80,5 @@ def logout():
     return redirect(url_for("login_page"))
 
 
-# -------------------------
-# App entry point
-# -------------------------
 if __name__ == "__main__":
     app.run(debug=True)
