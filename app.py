@@ -1,6 +1,10 @@
 import os
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
+from db import get_connection
+
+
+
 from flask import Flask, redirect, url_for, session, request, render_template
 from functools import wraps
 from auth.google_oauth import create_flow, get_user_info
@@ -75,6 +79,27 @@ def dashboard():
 def logout():
     session.clear()
     return redirect(url_for("login_page"))
+
+
+
+def init_db():
+    print("Initializing database...")
+    conn = get_connection()
+    with open("schema.sql", "r") as f:
+        conn.executescript(f.read())
+    conn.close()
+    print("Database initialized.")
+
+
+
+
+
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True)
+
+
+
 
 
 if __name__ == "__main__":
