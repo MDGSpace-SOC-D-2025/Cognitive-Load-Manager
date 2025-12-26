@@ -107,6 +107,15 @@ def dashboard():
     assignments=cur.fetchall()
 
 
+    cur.execute(""" 
+        SELECT IFNULL(SUM(duration_hours),0)
+        FROM study_sessions
+        WHERE user_id=?
+        """,(user_id,))
+    total_study_hours=cur.fetchone()[0]
+
+
+
     cur.execute("""
         SELECT load_score, load_label
         FROM cognitive_load
@@ -122,9 +131,10 @@ def dashboard():
         SELECT date, sleep_hours, fatigue_level
                 FROM user_state
                 WHERE user_id=?
-                ORDER BY date
+                ORDER BY date DESC
+                LIMIT 1
                 """, (user_id,))
-    state_history=cur.fetchall()
+    latest_state=cur.fetchone()
 
     conn.close()
 
@@ -133,7 +143,8 @@ def dashboard():
         user=session["user"],
         assignments=assignments,
         load=load,
-        state_history=state_history
+        latest_state=latest_state,
+        total_study_hours=total_study_hours
     )
 
 
@@ -158,6 +169,67 @@ def log_state():
 
 
     return redirect(url_for("dashboard"))
+
+
+
+@app.route("/start_session", methods=["POST"])
+@login_required
+def start_session():
+    user_id=session["user_id"]
+
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute("""
+        INSERT INTO study_sessions (user_id, start_time)
+        VALUES (?, DATETIME('now'))
+    """, (user_id,))
+
+    conn.commit()
+    conn.close()
+
+    return "", 204
+
+
+
+
+@app.route("/stop_session", methods=["POST"])
+@login_required
+def stop_session():
+    user_id=session["user_id"]
+
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute("""
+        SELECT id, start_time
+        FROM study_sessions
+        WHERE user_id=? AND end_time IS NULL
+        ORDER BY start_time DESC
+        LIMIT 1
+    """,(user_id,))
+    session_row=cur.fetchone()
+
+    if session_row:    
+        session_id, start_time=session_row
+        # THIS IS TO CHECK IF AN ACTIVE SESSION EXISTS
+
+        cur.execute("""
+            UPDATE study_sessions
+            SET end_time=DATETIME('now'), 
+                    duration_hours=
+                        (JULIANDAY(DATETIME('now')) - JULIANDAY(start_time)) * 24
+            WHERE id = ?
+        """, (session_id,))
+
+        
+    conn.commit()
+    conn.close()
+
+
+    return "", 204
+
+
 
 
 
