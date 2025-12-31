@@ -7,6 +7,10 @@ from flask import Flask, redirect, url_for, session, request, render_template
 from functools import wraps
 from auth.google_oauth import create_flow, get_user_info
 
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+from datetime import datetime, timezone
+
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"  
 
@@ -86,7 +90,8 @@ SELECT id FROM users WHERE google_id=?
 
     }
 
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("dashboard")) 
+# this"dashboard" is the name of the function defined ahead, url_for looks at the the place where this function is defined and redirects there. in this case, /dashboard
 
 
 @app.route("/dashboard")
@@ -228,6 +233,64 @@ def stop_session():
 
 
     return "", 204
+
+
+
+@app.route("/sync_calendar", methods=["POST"])
+@login_required
+def sync_calendar():
+    user_id=session["user_id"]
+
+    creds_data=session["credentials"]
+    credentials=Credentials(
+        token=creds_data["token"],
+        refresh_token=creds_data["refresh_token"],
+        token_uri=creds_data["token_uri"],
+        client_id=creds_data["client_id"],
+        client_secret=creds_data["client_secret"],
+        scopes=creds_data["scopes"]
+    )
+
+    service=build("calendar", "v3", credentials=credentials)
+    
+    now=datetime.utcnow().isoformat()+"Z"
+
+
+    events_result=service.events().list(
+        calendarId='primary',
+        timeMin=now,
+        maxResults=20,
+        singleEvents=True,
+        orderBy='startTime'
+
+    ).execute()
+
+    events=events_result.get("items", [])
+
+
+    user_id= session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+
+    
+    for event in events:
+        title=event.get('summary')
+
+        first=event.get('start')
+        start_time=first.get('dateTime')
+        start_date=first.get('date')
+        deadline=start_time or start_date
+        event_id=event["id"]
+
+        cur.execute("""
+        INSERT OR IGNORE INTO assignments(user_id, google_event_id, title, deadline)
+        VALUES (?,?,?,?)""", (user_id,event_id, title, deadline))
+    
+    conn.commit()
+    conn.close()
+
+
+    return redirect(url_for("dashboard"))
 
 
 

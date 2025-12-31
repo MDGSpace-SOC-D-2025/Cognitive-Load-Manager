@@ -102,5 +102,26 @@ function updateTimer() {
 {% endif %}
 
 
+
+
+<h3> LOG YOUR ASSIGNMENT DEADLINES USING GOOGLE CALENDAR HERE..</h3>
+<form action="/sync_calendar" method="post">
+<button type="submit"> click to sync with your google calendar </button>
+</form>
+
+
+<h2> UPCOMING DEADLINES</h2>
+{% if assignments %}
+    <ul>
+        {% for title, deadline in assignments %}
+            <li>
+                {{ title }} — Deadline: {{ deadline }}
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>No assignments found.</p>
+{% endif %}
+
 </body>
 </html>
