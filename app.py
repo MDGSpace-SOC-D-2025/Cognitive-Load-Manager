@@ -202,6 +202,16 @@ def dashboard():
     cognitive_load=float(predicting_model.predict(X)[0])
     print("the load is :",cognitive_load)
 
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute("""
+        INSERT INTO cognitive_load(user_id, load_score)
+        VALUES(?,?)""",
+        (user_id, cognitive_load))
+    
+    conn.commit()
+    conn.close()
 
 
 
