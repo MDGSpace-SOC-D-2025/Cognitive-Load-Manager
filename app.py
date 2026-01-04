@@ -1,6 +1,11 @@
 import os
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
+import joblib
+predicting_model=joblib.load("cognitive_load_model.pkl")
+
+
+
 from db import get_connection
 
 from flask import Flask, redirect, url_for, session, request, render_template
@@ -9,7 +14,7 @@ from auth.google_oauth import create_flow, get_user_info
 
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"  
@@ -74,7 +79,7 @@ SELECT id FROM users WHERE google_id=?
     user_id=cur.fetchone()[0]
     conn.close()
 
-    session["user_id"]=user_id
+    session["user_id"]=user_id #yaha pe user_id session me store hui as session.user_id=user_id, basically smthlike yaha session bana
     session["user"]={
         "name": user_info["name"],
         "email":user_info["email"]
@@ -97,7 +102,7 @@ SELECT id FROM users WHERE google_id=?
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    user_id=session["user_id"]
+    user_id=session["user_id"] #yaha pehle ye input dena pada ki user_id is the same session ka user id. thus user_id=session[user_id]
 
     conn=get_connection()
     cur=conn.cursor()
@@ -129,7 +134,7 @@ def dashboard():
         LIMIT 1                                 
     """, (user_id,))
 
-    load=cur.fetchone()
+    # cognitive_load=cur.fetchone()
 
 
     cur.execute("""
@@ -143,11 +148,69 @@ def dashboard():
 
     conn.close()
 
+     # Get cognitive load from session
+
+
+
+     
+    user_id=session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute(
+        """SELECT sleep_hours, fatigue_level
+          FROM user_state
+          WHERE user_id=?
+          LIMIT 1
+    """,(user_id,)
+    )
+    sleep_hours, fatigue_level=cur.fetchone()
+
+
+    cur.execute(
+        """SELECT duration_hours
+        FROM study_sessions
+        WHERE user_id=?
+        """,(user_id,)
+    )
+    study_hours=cur.fetchone()[0] or 0
+
+    cur.execute(
+        """SELECT COUNT(*), AVG(julianday(deadline)-julianday('now'))
+        FROM assignments
+        WHERE user_id=?
+    """,(user_id,)
+    )
+    assignments_due, avg_deadline_days=cur.fetchone()
+    avg_deadline_days=avg_deadline_days or 30
+
+
+    conn.close()
+
+    
+
+
+    X=[[
+    sleep_hours,
+    fatigue_level,
+    assignments_due,
+    avg_deadline_days,
+    study_hours
+    ]]
+
+
+    cognitive_load=float(predicting_model.predict(X)[0])
+    print("the load is :",cognitive_load)
+
+
+
+
+
     return render_template(
         "dashboard.html",
         user=session["user"],
         assignments=assignments,
-        load=load,
+        cognitive_load=cognitive_load,
         latest_state=latest_state,
         total_study_hours=total_study_hours
     )
@@ -272,8 +335,8 @@ def sync_calendar():
     conn=get_connection()
     cur=conn.cursor()
 
-    
-    for event in events:
+    # events is a list; event is a dictionary 
+    for event in events: 
         title=event.get('summary')
 
         first=event.get('start')
@@ -298,6 +361,7 @@ def sync_calendar():
 
 
 
+    
 @app.route("/logout")
 def logout():
     session.clear()
