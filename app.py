@@ -148,8 +148,6 @@ def dashboard():
 
     conn.close()
 
-     # Get cognitive load from session
-
 
 
      
@@ -359,6 +357,11 @@ def sync_calendar():
         INSERT OR IGNORE INTO assignments(user_id, google_event_id, title, deadline)
         VALUES (?,?,?,?)""", (user_id,event_id, title, deadline))
     
+
+        cur.execute("""
+            DELETE FROM assignments
+            WHERE deadline <date('now')""")
+
     conn.commit()
     conn.close()
 
