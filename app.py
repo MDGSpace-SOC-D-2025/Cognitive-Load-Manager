@@ -2,7 +2,7 @@ import os
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 import joblib
-predicting_model=joblib.load("cognitive_load_model.pkl")
+model=joblib.load("cognitive_model.pkl")
 
 
 
@@ -120,19 +120,20 @@ def dashboard():
     cur.execute(""" 
         SELECT IFNULL(SUM(duration_hours),0)
         FROM study_sessions
-        WHERE user_id=?
+        WHERE user_id=? 
+        AND date(end_time)=date('now')
         """,(user_id,))
     total_study_hours=cur.fetchone()[0]
 
 
 
-    cur.execute("""
-        SELECT load_score, load_label
-        FROM cognitive_load
-        WHERE user_id=?
-        ORDER BY date DESC
-        LIMIT 1                                 
-    """, (user_id,))
+    # cur.execute("""
+    #     SELECT load_score, load_label
+    #     FROM cognitive_load
+    #     WHERE user_id=?
+    #     ORDER BY date DESC
+    #     LIMIT 1                                 
+    # """, (user_id,))
 
     # cognitive_load=cur.fetchone()
 
@@ -159,6 +160,7 @@ def dashboard():
         """SELECT sleep_hours, fatigue_level
           FROM user_state
           WHERE user_id=?
+          ORDER BY date DESC
           LIMIT 1
     """,(user_id,)
     )
@@ -166,9 +168,10 @@ def dashboard():
 
 
     cur.execute(
-        """SELECT duration_hours
+        """ SELECT IFNULL(SUM(duration_hours),0)
         FROM study_sessions
-        WHERE user_id=?
+        WHERE user_id=? 
+        AND date(end_time)=date('now')
         """,(user_id,)
     )
     study_hours=cur.fetchone()[0] or 0
@@ -196,16 +199,17 @@ def dashboard():
     study_hours
     ]]
 
+    print(X)
 
-    cognitive_load=float(predicting_model.predict(X)[0])
+    cognitive_load=float(model.predict(X)[0])
     print("the load is :",cognitive_load)
 
     conn=get_connection()
     cur=conn.cursor()
 
     cur.execute("""
-        INSERT INTO cognitive_load(user_id, load_score)
-        VALUES(?,?)""",
+        INSERT INTO cognitive_load(user_id, load_score, date)
+        VALUES(?,?, DATETIME('now', 'localtime'))""",
         (user_id, cognitive_load))
     
     conn.commit()
@@ -222,6 +226,7 @@ def dashboard():
         latest_state=latest_state,
         total_study_hours=total_study_hours
     )
+
 
 
 @app.route("/log_state", methods=["POST"])
