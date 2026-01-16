@@ -1,11 +1,67 @@
 import os
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
+import os
+os.environ["GOOGLE_API_KEY"]="AIzaSyDHwjZ0O0B6CI-hB2vVYGAyPSBns0OT3sM"
+
+
+import joblib
+model=joblib.load("cognitive_model.pkl")
+
+
+
 from db import get_connection
 
 from flask import Flask, redirect, url_for, session, request, render_template
 from functools import wraps
 from auth.google_oauth import create_flow, get_user_info
+
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+from datetime import datetime, timezone, date, timedelta
+
+# from langchain.utilities import SQLDatabase
+from langchain_core.prompts import PromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+print("LangChain + Gemini OK")
+
+
+# import google.generativeai as genai
+# import os
+
+# genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+
+# models = genai.list_models()
+
+# for model in models:
+#     print(model.name, "→ supports generateContent:", "generateContent" in model.supported_generation_methods)
+
+def generate_suggestions(cog_loadfromDB):
+
+    prompt=PromptTemplate(
+        input_variables=["cog_loadfromDB"],
+        template="""
+    You are a cognitive load management assistant.
+    The user's current cognitive load (from 0-100) is {cog_loadfromDB}.
+    Suggest exactly 3 concise actions to reduce this cognitive load.
+    Return them as bullet points.
+    Each suggestion must be under 15 words.
+    Be supportive, not commanding.
+    """  
+    )
+
+
+    llm=ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        temperature=0.4
+    )
+
+    response=llm.invoke(
+        prompt.format(cog_loadfromDB=cog_loadfromDB)
+    )
+
+    print(response.content)
+    return(response.content)
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"  
@@ -70,7 +126,7 @@ SELECT id FROM users WHERE google_id=?
     user_id=cur.fetchone()[0]
     conn.close()
 
-    session["user_id"]=user_id
+    session["user_id"]=user_id #yaha pe user_id session me store hui as session.user_id=user_id, basically smthlike yaha session bana
     session["user"]={
         "name": user_info["name"],
         "email":user_info["email"]
@@ -86,13 +142,14 @@ SELECT id FROM users WHERE google_id=?
 
     }
 
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("dashboard")) 
+# this"dashboard" is the name of the function defined ahead, url_for looks at the the place where this function is defined and redirects there. in this case, /dashboard
 
 
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    user_id=session["user_id"]
+    user_id=session["user_id"] #yaha pehle ye input dena pada ki user_id is the same session ka user id. thus user_id=session[user_id]
 
     conn=get_connection()
     cur=conn.cursor()
@@ -107,34 +164,137 @@ def dashboard():
     assignments=cur.fetchall()
 
 
-    cur.execute("""
-        SELECT load_score, load_label
-        FROM cognitive_load
-        WHERE user_id=?
-        ORDER BY date DESC
-        LIMIT 1                                 
-    """, (user_id,))
+    cur.execute(""" 
+        SELECT IFNULL(SUM(duration_hours),0)
+        FROM study_sessions
+        WHERE user_id=? 
+        AND date(end_time)=date('now')
+        """,(user_id,))
+    total_study_hours=cur.fetchone()[0]
 
-    load=cur.fetchone()
+
+
+    # cur.execute("""
+    #     SELECT load_score, load_label
+    #     FROM cognitive_load
+    #     WHERE user_id=?
+    #     ORDER BY date DESC
+    #     LIMIT 1                                 
+    # """, (user_id,))
+
+    # cognitive_load=cur.fetchone()
 
 
     cur.execute("""
         SELECT date, sleep_hours, fatigue_level
                 FROM user_state
                 WHERE user_id=?
-                ORDER BY date
+                ORDER BY date DESC
+                LIMIT 1
                 """, (user_id,))
-    state_history=cur.fetchall()
+    latest_state=cur.fetchone()
 
     conn.close()
+
+
+
+     
+    user_id=session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute(
+        """SELECT sleep_hours, fatigue_level
+          FROM user_state
+          WHERE user_id=?
+          ORDER BY date DESC
+          LIMIT 1
+    """,(user_id,)
+    )
+    sleep_hours, fatigue_level=cur.fetchone()
+
+
+    cur.execute(
+        """ SELECT IFNULL(SUM(duration_hours),0)
+        FROM study_sessions
+        WHERE user_id=? 
+        AND date(end_time)=date('now')
+        """,(user_id,)
+    )
+    study_hours=cur.fetchone()[0] or 0
+
+    cur.execute(
+        """SELECT COUNT(*), AVG(julianday(deadline)-julianday('now'))
+        FROM assignments
+        WHERE user_id=?
+    """,(user_id,)
+    )
+    assignments_due, avg_deadline_days=cur.fetchone()
+    avg_deadline_days=avg_deadline_days or 30
+
+
+    conn.close()
+
+    
+
+
+    X=[[
+    sleep_hours,
+    fatigue_level,
+    assignments_due,
+    avg_deadline_days,
+    study_hours
+    ]]
+
+    print(X)
+
+    cognitive_load=float(model.predict(X)[0])
+    print("the load is :",cognitive_load)
+
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute("""
+        INSERT INTO cognitive_load(user_id, load_score, date)
+        VALUES(?,?, DATETIME('now', 'localtime'))""",
+        (user_id, cognitive_load))
+    
+    conn.commit()
+    conn.close()
+
+
+    user_id=session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute("""
+        SELECT load_score
+        FROM cognitive_load
+        WHERE user_id=?
+        ORDER BY date DESC
+        LIMIT 1                                 
+     """, (user_id,))
+
+
+    cog_loadfromDB=cur.fetchone()[0]
+
+    conn.close()
+
+
+    suggestions=generate_suggestions(cog_loadfromDB)
+
+
 
     return render_template(
         "dashboard.html",
         user=session["user"],
         assignments=assignments,
-        load=load,
-        state_history=state_history
+        cognitive_load=cognitive_load,
+        latest_state=latest_state,
+        total_study_hours=total_study_hours,
+        suggestions=suggestions
     )
+
 
 
 @app.route("/log_state", methods=["POST"])
@@ -161,8 +321,141 @@ def log_state():
 
 
 
+@app.route("/start_session", methods=["POST"])
+@login_required
+def start_session():
+    user_id=session["user_id"]
+
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute("""
+        INSERT INTO study_sessions (user_id, start_time)
+        VALUES (?, DATETIME('now'))
+    """, (user_id,))
+
+    conn.commit()
+    conn.close()
+
+    return "", 204
 
 
+
+
+@app.route("/stop_session", methods=["POST"])
+@login_required
+def stop_session():
+    user_id=session["user_id"]
+
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute("""
+        SELECT id, start_time
+        FROM study_sessions
+        WHERE user_id=? AND end_time IS NULL
+        ORDER BY start_time DESC
+        LIMIT 1
+    """,(user_id,))
+    session_row=cur.fetchone()
+
+    if session_row:    
+        session_id, start_time=session_row
+        # THIS IS TO CHECK IF AN ACTIVE SESSION EXISTS
+
+        cur.execute("""
+            UPDATE study_sessions
+            SET end_time=DATETIME('now'), 
+                    duration_hours=
+                        (JULIANDAY(DATETIME('now')) - JULIANDAY(start_time)) * 24
+            WHERE id = ?
+        """, (session_id,))
+
+        
+    conn.commit()
+    conn.close()
+
+
+    return "", 204
+
+
+
+@app.route("/sync_calendar", methods=["POST"])
+@login_required
+def sync_calendar():
+    user_id=session["user_id"]
+
+    creds_data=session["credentials"]
+    credentials=Credentials(
+        token=creds_data["token"],
+        refresh_token=creds_data["refresh_token"],
+        token_uri=creds_data["token_uri"],
+        client_id=creds_data["client_id"],
+        client_secret=creds_data["client_secret"],
+        scopes=creds_data["scopes"]
+    )
+
+    service=build("calendar", "v3", credentials=credentials)
+    
+    now=datetime.utcnow().isoformat()+"Z"
+
+
+    events_result=service.events().list(
+        calendarId='primary',
+        timeMin=now,
+        maxResults=20,
+        singleEvents=True,
+        orderBy='startTime'
+
+    ).execute()
+
+    events=events_result.get("items", [])
+
+
+    user_id= session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+
+    # events is a list; event is a dictionary 
+    for event in events: 
+        title=event.get('summary')
+
+        first=event.get('start')
+        start_time=first.get('dateTime')
+        start_date=first.get('date')
+        if start_time:
+            dt=datetime.fromisoformat(start_time)
+            deadline=dt.strftime('%Y-%m-%d %H:%M:%S')
+
+        else:
+            deadline=start_date
+
+
+        # deadline=start_time or start_date
+        event_id=event["id"]
+
+        cur.execute("""
+        INSERT OR IGNORE INTO assignments(user_id, google_event_id, title, deadline)
+        VALUES (?,?,?,?)""", (user_id,event_id, title, deadline))
+    
+
+        cur.execute("""
+            DELETE FROM assignments
+            WHERE deadline <date('now')""")
+
+    conn.commit()
+    conn.close()
+
+
+    return redirect(url_for("dashboard"))
+
+
+
+
+
+
+
+    
 @app.route("/logout")
 def logout():
     session.clear()
