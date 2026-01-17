@@ -2,7 +2,7 @@ import os
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 import os
-os.environ["GOOGLE_API_KEY"]="AIzaSyDHwjZ0O0B6CI-hB2vVYGAyPSBns0OT3sM"
+os.environ["GOOGLE_API_KEY"]="AIzaSyDa09qxaoEcqB6SwrhDq8RaRA87PuxmJj4"
 
 
 import joblib
@@ -187,7 +187,7 @@ def dashboard():
 
     # cognitive_load=cur.fetchone()
 
-
+   
     cur.execute("""
         SELECT date, sleep_hours, fatigue_level
                 FROM user_state
@@ -196,6 +196,7 @@ def dashboard():
                 LIMIT 1
                 """, (user_id,))
     latest_state=cur.fetchone()
+        
 
     conn.close()
 
@@ -299,6 +300,25 @@ def dashboard():
     )
 
 
+@app.route("/daily_log")
+@login_required
+def daily_log_page():
+    user_id=session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+    cur.execute("""
+        SELECT date, sleep_hours, fatigue_level
+                FROM user_state
+                WHERE user_id=?
+                ORDER BY date DESC
+                LIMIT 1
+                """, (user_id,))
+    latest_state=cur.fetchone()
+    conn.close()
+
+    return render_template("daily_log.html", latest_state=latest_state)
+
+
 
 @app.route("/log_state", methods=["POST"])
 @login_required
@@ -321,6 +341,26 @@ def log_state():
 
 
     return redirect(url_for("dashboard"))
+
+
+@app.route("/study_session")
+@login_required
+def study_session_page():
+    user_id=session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute(""" 
+        SELECT IFNULL(SUM(duration_hours),0)
+        FROM study_sessions
+        WHERE user_id=? 
+        AND date(end_time)=date('now')
+        """,(user_id,))
+    total_study_hours=cur.fetchone()[0]
+    
+    return render_template("study_session.html", total_study_hours=total_study_hours )
+
+
 
 
 

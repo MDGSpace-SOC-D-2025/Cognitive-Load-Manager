@@ -9,82 +9,12 @@
   <p>Email: {{ user.email }}</p>
 
   <a href="/logout">Logout</a>
+<br>
 
-<h2> DAILY STATE LOG</h2>
-<form action="{{url_for('log_state')}}" method="POST" class="state-form">
+<a href="{{ url_for('daily_log_page') }}">LOG YOUR STATE HERE </a>
+<BR>
+<a href="{{ url_for('study_session_page') }}">TO START YOUR STUDY SESSION, CLICK HERE </a>
 
-
-<label for="sleep_hours"> Sleep hours last night: </label>
-<input
-  type="number"
-  id="sleep_hours"
-  name="sleep_hours"
-  step="0.1"
-  min="0"
-  max="24"
-  required>
-
-  <label for="fatigue_level">
-    Fatigue level:
-    <span id="fatigue_level">5</span>/10
-  </label>
-<input
-type="range"
-id="fatigue_level"
-name="fatigue_level"
-min="1"
-max="10"
-value="5"
-oninput="fatigue_value.innnerText=this.value"
-required
->
-
-<button type="submit"> Save today's state</button>
-
-</form>
-
-
-
-<h3> STUDY/WORK SESSION</h3>
-<div id="timer"> 00:00:00</div>
-<button onclick="startSession()"> START</button>
-<button onclick="stopSession()"> STOP</button>
-
-
-<script>
-let startTime=null;
-let timeInterval=null;
-
-function startSession(){
-  fetch("/start_session", {method:"POST"});
-
-  startTime= new Date();
-  timerInterval= setInterval(updateTimer, 1000);
-  // timer ticks off every 1000ms=1sec
-
-}
-
-function stopSession() {
-    fetch("/stop_session", { method: "POST" });
-
-    clearInterval(timerInterval);
-    timerInterval = null;
-}
-
-function updateTimer() {
-    const now = new Date();
-    const diff = Math.floor((now - startTime) / 1000);
-
-    const hours = String(Math.floor(diff / 3600)).padStart(2, "0");
-    const minutes = String(Math.floor((diff % 3600) / 60)).padStart(2, "0");
-    const seconds = String(diff % 60).padStart(2, "0");
-
-    document.getElementById("timer").innerText =
-        `${hours}:${minutes}:${seconds}`;
-}
-
-
-</script>
 
 <h3>Total Study Time</h3>
 <p>{{ total_study_hours | round(2) }} hours</p>
