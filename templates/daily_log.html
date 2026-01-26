@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily state log</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='daily_log.css') }}">
 </head>
 <body>
     <h2> DAILY STATE LOG</h2>
+    <br>
+    <h5> Track your fatigue levels and sleep patterns and try and maintain healthy sleep habits</h5>
 <form action="{{url_for('log_state')}}" method="POST" class="state-form">
 
 

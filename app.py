@@ -289,6 +289,151 @@ def dashboard():
 
 
 
+    user_id=session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+    cur.execute("""
+        SELECT 
+                DATE(date) AS day, 
+                AVG(load_score) AS avg_load
+        FROM cognitive_load
+        WHERE user_id=?
+        AND date>=DATE('now', '-8 days')
+        GROUP BY day
+        ORDER BY day
+        """,(user_id,)  )
+          # had to do all this since in our date, both date and time are stored
+    
+    rows=cur.fetchall()
+    conn.close()
+
+    # dates=[row[0] for row in rows]
+    # avg_loads=[round(row[1], 2) for row in rows]
+
+    # print(dates)
+    # print(avg_loads)
+    import datetime
+
+    db_results={row[0]:row[1] for row in rows} #DICTIONARY
+
+    today=datetime.date.today()
+    dates=[]
+    avg_loads=[]
+
+    for i in range(8,-1,-1):
+        date_str=(today-datetime.timedelta(days=i)).isoformat()
+        dates.append(date_str)
+
+        avg_loads.append(db_results.get(date_str,0))
+
+    print(dates)
+    print(avg_loads)
+
+    print('THIS IS LOAD KA')
+
+    user_id=session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+    cur.execute("""
+        SELECT date, 
+                sleep_hours,
+                fatigue_level
+        FROM user_state
+        WHERE user_id=?
+        AND date>=DATE('now', '-8 days')
+        GROUP BY date
+        ORDER BY date
+                """, (user_id,))
+
+    rowssf=cur.fetchall()    
+    conn.close()
+
+    # datessf=[row[0] for row in rowssf]  
+    # sdata=[row[1] for row in rowssf]
+    # fdata=[row[2] for row in rowssf]
+
+    # print(datessf)
+    # print(fdata)
+    # print(sdata)
+
+    import datetime
+
+    db_results={row[0]:row[1] for row in rowssf} #DICTIONARY
+    db_results2={row[0]:row[2] for row in rowssf}
+
+    today=datetime.date.today()
+    datessf=[]
+    sdata=[]
+    fdata=[]
+
+    for i in range(8,-1,-1):
+        date_str=(today-datetime.timedelta(days=i)).isoformat()
+        datessf.append(date_str)
+
+        sdata.append(db_results.get(date_str,0))
+
+
+    for i in range(8,-1,-1):
+        date_str=(today-datetime.timedelta(days=i)).isoformat()
+        # datessf.append(date_str)
+
+        fdata.append(db_results2.get(date_str,0))
+
+    print(datessf)
+    print(sdata)
+    print(fdata)
+
+
+    print('THE ABOVE ONE IS OF SLEEP AND FATIGUE')
+
+    user_id=session["user_id"]
+    conn=get_connection()
+    cur=conn.cursor()
+
+    cur.execute("""
+        SELECT 
+                DATE(start_time) AS day, 
+                SUM(duration_hours) AS net_study
+        FROM study_sessions
+        WHERE user_id=?
+        AND start_time>=DATE('now', '-8 days')
+        GROUP BY day
+        ORDER BY day
+        """,(user_id,)  )
+    
+    rowsss=cur.fetchall()
+    conn.close()
+
+    # datesss=[row[0] for row in rowsss]  
+    # wdata=[row[1] for row in rowsss]
+    # print(datesss)
+    # print(wdata)
+
+    import datetime
+
+    db_results={row[0]:row[1] for row in rowsss} 
+    # CONVERTS THE LIST TO A DICTIONARY
+
+    today=datetime.date.today()
+    datesss=[]
+    wdata=[]
+
+    for i in range(8,-1,-1):
+        date_str=(today-datetime.timedelta(days=i)).isoformat()
+        datesss.append(date_str)
+
+        wdata.append(db_results.get(date_str,0))
+
+    print(datesss)
+    print(wdata)
+
+
+
+
+
+
+
+
     return render_template(
         "dashboard.html",
         user=session["user"],
@@ -296,7 +441,14 @@ def dashboard():
         cognitive_load=cognitive_load,
         latest_state=latest_state,
         total_study_hours=total_study_hours,
-        suggestions=suggestions
+        suggestions=suggestions,
+        load_dates=dates,
+        avg_loads=avg_loads,
+        datessf=datessf,
+        sdata=sdata,
+        fdata=fdata, 
+        datesss=datesss,
+        wdata=wdata
     )
 
 

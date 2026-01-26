@@ -3,6 +3,8 @@
 <html>
 <head>
   <title>Dashboard</title>
+   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <h2>Welcome, {{ user.name }}</h2>
@@ -11,19 +13,32 @@
   <a href="/logout">Logout</a>
 <br>
 
+
+<h2> cognitive load</h2>
+<p> {{cognitive_load| round(2)}}</p>
+
+<h2> BASED ON YOUR COGNITIVE LOAD, HERE ARE A FEW SUGGESTIONS:</h2>
+        <ul>
+{% for line in suggestions.split('\n') %}
+  {% if line.strip() %}
+    <li>{{ line.replace('*', '').strip() }}</li>
+  {% endif %}
+{% endfor %}
+</ul>
+
+
 <a href="{{ url_for('daily_log_page') }}">LOG YOUR STATE HERE </a>
-<BR>
+<br>
 <a href="{{ url_for('study_session_page') }}">TO START YOUR STUDY SESSION, CLICK HERE </a>
 
 
+
+<H2> QUICK SUMMARY </H2>
 <h3>Total Study Time</h3>
 <p>{{ total_study_hours | round(2) }} hours</p>
 
 
-
-
 <h3>Last Logged State</h3>
-
 {% if latest_state %}
     <p><strong>Date:</strong> {{ latest_state[0] }}</p>
     <p><strong>Sleep Hours:</strong> {{ latest_state[1] }}</p>
@@ -58,16 +73,78 @@
     <button type="submit">Predict Cognitive Load</button>
 </form> -->
 
-<h2> cognitive load</h2>
-<p> {{cognitive_load}}</p>
+<h3>Weekly Cognitive Load</h3>
+<canvas id="cognitiveLoadChart"></canvas>
+<script>
+    const labels={{load_dates| tojson}};
+    const dataValues={{avg_loads| tojson}};
 
-<h2> BASED ON YOUR COGNITIVE LOAD, HERE ARE A FEW SUGGESTIONS:</h2>
-        <ul>
-{% for line in suggestions.split('\n') %}
-  {% if line.strip() %}
-    <li>{{ line.replace('*', '').strip() }}</li>
-  {% endif %}
-{% endfor %}
-</ul>
+
+    let myChart=document.getElementById("cognitiveLoadChart").getContext('2d');
+
+    let cog_load_chart= new Chart(myChart, {
+        type:'line',
+        data:{
+            labels: labels,
+            datasets:[{
+                label: 'cogload',
+                data: dataValues,
+            }]
+        }
+    })
+</script>
+
+
+<h3>Weekly sleephours and fatigue level</h3>
+<canvas id="sleepandfatigueChart"></canvas>
+<script>
+    const labels2={{datessf| tojson}};
+    const dataValuesA={{sdata| tojson}};
+    const dataValuesB={{fdata| tojson}};
+
+
+    let myChart2=document.getElementById("sleepandfatigueChart").getContext('2d');
+
+    let sleepnfatigueChart= new Chart(myChart2, {
+        type:'bar',
+        data:{
+            labels: labels,
+            datasets:[{
+                label: 'sleep',
+                data: dataValuesA,
+            },
+        {
+            label:'fatigue',
+            data:dataValuesB,
+        }]
+        }
+    })
+</script>
+
+
+
+<h3>Weekly study/work sessions</h3>
+<canvas id="studyandworkChart"></canvas>
+<script>
+    const labels3={{datesss| tojson}};
+    const dataValuesC={{wdata| tojson}};
+
+
+    let myChart3=document.getElementById("studyandworkChart").getContext('2d');
+
+    let studynworkChart= new Chart(myChart3, {
+        type:'bar',
+        data:{
+            labels: labels3,
+            datasets:[{
+                label: 'no, of hours',
+                data: dataValuesC,
+            }]
+        }
+    })
+</script>
+
+
+
 </body>
 </html>
